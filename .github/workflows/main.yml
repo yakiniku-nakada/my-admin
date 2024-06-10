@@ -1,0 +1,60 @@
+name: sgt-client build and deploy [sand]
+on:
+  #schedule:
+  #  # cron: '0 11 * * 1-5'は平日のUTCの11時（JSTの20時）に一致
+  #  - cron: '0 11 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      checkoutTag:
+        description: 'The Version tag to checkout'
+        required: true
+        default: 'main'
+
+jobs:
+  build:
+    runs-on:
+      group: large-runner-group
+    env:
+      #CHECKOUT_TAG: ${{ github.event_name == 'schedule' && 'main' || github.event.inputs.checkoutTag }}
+      CHECKOUT_TAG: 'v1.000000001'
+    steps:
+    - name: Set title to GITHUB_ENV
+      run: |
+        min_ver=$(cat sand.json | jq .client | jq .minVer | sed "s/\"//g" )
+        max_ver=$(cat sand.json | jq .client | jq .maxVer | sed "s/\"//g" )
+        checkout_ver=$(echo "${{ env.CHECKOUT_TAG }}" | sed "s/\"//g" | sed "s/v//g")
+        event=$(echo "${max_ver}" | cut -c 14-20)
+        checkout_event=$(echo "${checkout_ver}" | cut -c 14-20)
+        echo "MIN_VER=${min_ver}" >> $GITHUB_ENV
+        echo "MAX_VAR=${max_ver}" >> $GITHUB_ENV
+        echo "CHECKOUT_VER=${checkout_ver}" >> $GITHUB_ENV
+        echo "CHECKOUT_EVENT=${checkout_event}" >> $GITHUB_ENV
+        echo "EVENT=${event}" >> $GITHUB_ENV
+        echo "${{ env.MIN_VER < env.CHECKOUT_VER }}"
+        echo "${{ env.MAX_VER > env.CHECKOUT_VER }}"
+        echo "${{ env.EVENT != env.CHECKOUT_EVENT }}"
+
+    - name: Check Version
+      if: >-
+        ${{ 
+          fromJson(env.CHECKOUT_VER) < fromJson(env.MIN_VER) || 
+          fromJson(env.CHECKOUT_VER) > fromJson(env.MAX_VER) || 
+          env.EVENT != env.CHECKOUT_EVENT 
+        }}
+      run: 
+        exit 1
+
+    - uses: actions/checkout@v2
+      with:
+        ref: ${{ env.CHECKOUT_TAG }}
+
+    - uses: nexterias/actions-vercel@v1
+      with:
+        token: '0Rgr78bFzpChBusuTBVB7jAi'
+        org-id: 'team_Z2AdbDR5FGfZ8sDBlQfDvRgb' 
+        project-id: 'prj_0geAw1RLXCgJu2weTll37nw5E73D'
+        production: ${{ github.ref == env.CHECKOUT_TAG }} 
+        prebuilt: true
+        alias-domains: admin.exam.sgt.djty.co
+        
+
